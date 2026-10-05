@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Architecture Oracle 12c à 19c : cours pour débutant</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;800&family=Public+Sans:wght@400;600&display=swap">
+<style>
+:root{--bg:#f3f6f9;--card:#fff;--ink:#14213d;--mut:#4d5b73;--line:#cfd8e3;--a:#0b6e6e;--a2:#b4372a;--hl:#e3f2f1;--warn:#fff4d6;--wt:#6b4e00;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1724;--card:#17223a;--ink:#e8eef8;--mut:#a3b1c8;--line:#2b3a58;--a:#4cc9c0;--a2:#ff8a78;--hl:#12353a;--warn:#3a3118;--wt:#f2d98a}}
+:root[data-theme="dark"]{--bg:#0f1724;--card:#17223a;--ink:#e8eef8;--mut:#a3b1c8;--line:#2b3a58;--a:#4cc9c0;--a2:#ff8a78;--hl:#12353a;--warn:#3a3118;--wt:#f2d98a}
+html{scroll-padding-top:env(safe-area-inset-top,0px);scroll-behavior:smooth}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.7 "Public Sans",system-ui,sans-serif}
+header{background:var(--ink);color:var(--bg);padding:48px 20px 40px}
+header>div,main,footer{max-width:820px;margin:0 auto}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;line-height:1.2}
+h1{font-size:clamp(2rem,6vw,3rem);margin:0 0 12px;font-weight:800}
+header p{margin:6px 0;opacity:.85}
+h2{font-size:1.7rem;margin:0 0 14px;color:var(--a);border-bottom:3px solid var(--a);padding-bottom:6px}
+h3{font-size:1.2rem;margin:22px 0 6px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px 22px;margin:22px 0}
+p{margin:10px 0;max-width:70ch}
+.ref{display:inline-block;background:var(--hl);color:var(--a);border-radius:5px;padding:0 8px;font-weight:600;font-size:.88rem}
+.box{border-left:5px solid var(--a);background:var(--hl);padding:10px 16px;margin:16px 0;border-radius:0 8px 8px 0}
+.box.w{border-color:#c98a00;background:var(--warn);color:var(--wt)}
+.box b:first-child{display:block}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+.flow span{background:var(--ink);color:var(--bg);padding:6px 12px;border-radius:6px;font-size:.92rem}
+.flow i{font-style:normal;color:var(--mut)}
+dl{margin:12px 0}dt{font-weight:600;color:var(--a2);margin-top:12px}dd{margin:2px 0 0 0;max-width:70ch}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.95rem;min-width:520px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--ink);color:var(--bg)}
+code{background:var(--hl);padding:1px 6px;border-radius:4px;font-size:.9em}
+nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--card);border-bottom:1px solid var(--line);padding:8px 14px;overflow-x:auto;white-space:nowrap;z-index:5}
+nav a{color:var(--a);text-decoration:none;margin-right:16px;font-size:.9rem;font-weight:600}
+footer{padding:20px;text-align:center;color:var(--mut);font-size:.9rem}
+</style>
+</head>
+<body>
+<header><div>
+<h1>Architecture Oracle (12c à 19c)</h1>
+<p>Cours Bases de Données Avancées, Prof. Zineb Lamghari, Partie 4</p>
+<p>Guide d'étude préparé pour Jihad Tichti, niveau : débutant complet</p>
+</div></header>
+<nav>
+<a href="#pre">Prérequis</a><a href="#vue">Vue d'ensemble</a><a href="#serveur">Serveur</a><a href="#ivb">Instance vs BD</a><a href="#conn">Connexion</a><a href="#fich">Fichiers</a><a href="#log">Logique</a><a href="#mem">Mémoire</a><a href="#proc">Processus</a><a href="#mt">Multitenant</a><a href="#fin">Résumé</a>
+</nav>
+<main>
+
+<section id="pre">
+<h2>0. Ce que tu dois savoir avant de commencer</h2>
+<p>Pas de panique : ce chapitre utilise beaucoup de sigles (SGA, PGA, PMON...), mais derrière, il n'y a que quelques idées simples. Avant de les voir, voici les bases dont tout le chapitre dépend.</p>
+<dl>
+<dt>Une base de données, c'est quoi ?</dt>
+<dd>Une collection organisée d'informations (clients, produits, notes d'étudiants...) stockée de façon durable, en général sous forme de tables. Un logiciel appelé SGBD (système de gestion de base de données) la gère. Oracle est l'un de ces logiciels.</dd>
+<dt>Le disque et la RAM (mémoire vive)</dt>
+<dd>C'est l'idée la plus importante du chapitre. Le disque (SSD ou disque dur) garde les données même quand l'ordinateur est éteint, mais il est lent. La RAM est très rapide, mais elle s'efface à l'extinction. Oracle fait donc tout le temps la navette : il garde sur disque ce qui doit survivre, et il charge en RAM ce dont il a besoin tout de suite. Presque toute l'architecture Oracle découle de ce compromis.</dd>
+<dt>Un processus</dt>
+<dd>Un programme en cours d'exécution. Quand tu ouvres un navigateur, l'ordinateur crée un processus. Oracle en lance plusieurs en même temps, chacun avec un travail précis. Ceux qui travaillent sans que personne ne les voie s'appellent des processus d'arrière-plan (background).</dd>
+<dt>Client et serveur</dt>
+<dd>Le client est le programme que tu utilises (SQL Developer, sqlplus). Le serveur est le programme Oracle qui détient les données et répond. Le client envoie des demandes en SQL, le serveur répond. Ils peuvent être sur la même machine (localhost, comme dans ton cours) ou sur deux machines.</dd>
+<dt>SQL</dt>
+<dd>Le langage pour parler à une base : <code>SELECT</code> pour lire, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code> pour modifier. Les instructions qui modifient s'appellent LMD (langage de manipulation de données).</dd>
+<dt>Un cache</dt>
+<dd>Une réserve en RAM qui garde des copies de choses déjà utilisées, pour éviter de les relire sur le disque. C'est comme garder sur ton bureau les livres que tu consultes souvent plutôt que d'aller les chercher dans la bibliothèque à chaque fois.</dd>
+<dt>L'algorithme LRU (Least Recently Used)</dt>
+<dd>Quand le cache est plein, il faut jeter quelque chose. LRU jette l'élément utilisé il y a le plus longtemps. Logique : ce qu'on n'a pas touché depuis longtemps a peu de chances d'être redemandé.</dd>
+<dt>Transaction, commit, rollback</dt>
+<dd>Une transaction est un groupe d'opérations qui doivent réussir ensemble ou échouer ensemble (exemple : retirer 100 DH d'un compte et les ajouter à un autre). COMMIT valide, ROLLBACK annule et revient en arrière. Le chapitre parle de "cohérence des transactions" et de "undo" : c'est ce mécanisme.</dd>
+<dt>Un fichier de données</dt>
+<dd>Un simple fichier sur le disque (extension <code>.DBF</code>, <code>.CTL</code>...). Dans Oracle, une base de données n'est rien d'autre qu'un ensemble de fichiers.</dd>
+</dl>
+<div class="box"><b>L'analogie fil rouge : la bibliothèque</b>
+La <b>base de données</b>, ce sont les livres rangés sur les étagères (des fichiers sur le disque). L'<b>instance</b>, c'est l'équipe de bibliothécaires avec leurs bureaux et leurs chariots de travail (des processus et de la RAM). Sans bibliothécaires, les livres sont inaccessibles. Sans livres, les bibliothécaires n'ont rien à gérer. Les deux ensemble forment le <b>serveur Oracle</b>.</div>
+</section>
+
+<section id="vue">
+<h2>1. Vue d'ensemble du chapitre</h2>
+<p><span class="ref">pages 1/55 et 2/55</span> Le titre dit "Partie 4 : Composants de l'architecture Oracle =&gt; 12c". Le "12c" signifie que l'on décrit l'architecture apparue avec Oracle 12c (la version "c" comme cloud), qui introduit le mode <b>multitenant</b>. Ton cours travaille ensuite sur Oracle 19c, qui garde cette architecture.</p>
+<p>Le programme tient dans le bandeau noir en haut des diapositives : instance vs base de données, mémoire (SGA, PGA), processus de fond (SMON, PMON, DBWn, LGWR, CKPT), fichiers physiques (datafiles, controlfiles, redo logs) et architecture multitenant (CDB et PDB).</p>
+<p><span class="ref">page 1/55, première image</span> C'est le schéma qui résume tout le chapitre. En haut à gauche, un cadre CDB avec des fichiers verts et des cylindres bleus (les PDB). Au centre, un "processus utilisateur" (ovale jaune) qui parle à un "processus serveur" (ovale rose) et sa zone PGA. À droite, un grand bloc rose "Instance" contenant la "Mémoire SGA" (grise) et, en bas, des ovales jaunes : PMON, SMON, DBWR, LGWR, CKPT. Sous l'instance, le bloc orange "Base de données" avec les fichiers de données, de contrôle et de journalisation, et à côté le fichier de paramètres, le fichier de mots de passe et les fichiers de journalisation archivés. Retiens la structure : <b>en haut la mémoire et les processus (instance), en bas les fichiers (base de données)</b>.</p>
+<p><span class="ref">page 2/55</span> Les objectifs : savoir décrire l'architecture Oracle et ses composants, et savoir lister les structures utilisées quand un utilisateur se connecte à une instance.</p>
+</section>
+
+<section id="serveur">
+<h2>2. Le serveur Oracle</h2>
+<p><span class="ref">pages 3/55 et 4/55</span> La page 3/55 reprend le même schéma en ajoutant un "client" (l'ordinateur à gauche) et en montrant la CDB en dessous. La page 4/55, titrée "Architecture Multitenant", contient deux choses. À gauche, un schéma presque identique au premier : instance, SGA avec ses trois blocs (zone de mémoire partagée, cache de tampons de données, tampon de journalisation), les processus de fond, puis la CDB avec ses fichiers et ses PDB. À droite, un encadré vert avec un exemple concret : instance <code>orcl</code>, CDB <code>ORCLCDB</code>, et quatre conteneurs : CDB$ROOT (métadonnées globales), PDB$SEED (le modèle), PDB1 (base "RH") et PDB2 (base "VENTES"). C'est un exemple pour que tu voies des noms réels.</p>
+<p><span class="ref">page 5/55</span> Définition à connaître par coeur : un serveur Oracle est un SGBD qui offre une méthode de gestion de l'information ouverte, complète et intégrée, et il est constitué d'une <b>instance</b> et d'une <b>base de données</b>.</p>
+<p><span class="ref">page 6/55</span> Le schéma en anglais montre le trajet d'une demande : l'application cliente envoie un "Connect Packet" au <b>Listener</b>. Le Listener est comme le réceptionniste à l'entrée : il écoute sur un port réseau, reçoit les demandes de connexion et les confie à un "Server Process". Ce dernier traite le SQL et accède à la base (Data Files et System Files).</p>
+<p><span class="ref">page 7/55</span> Rôles du serveur : traiter les instructions SQL, gérer la mémoire et les processus, assurer la récupération (revenir à un état correct après une panne) et la performance. En mode multitenant, il héberge une CDB qui contient plusieurs PDB.</p>
+<p><span class="ref">page 8/55</span> Le schéma circulaire est le plus important à mémoriser : <b>Serveur Oracle = Instance + Base de données</b>. L'instance est "un ensemble de structures mémoire qui gèrent les fichiers de la base et un ensemble de processus d'arrière-plan". La base de données est "un ensemble de fichiers qui stockent les données".</p>
+</section>
+
+<section id="ivb">
+<h2>3. Instance vs base de données</h2>
+<p>C'est la question d'examen classique. Prends le temps de la comprendre.</p>
+<div class="scroll"><table>
+<tr><th>Instance</th><th>Base de données</th></tr>
+<tr><td>Vit en RAM et dans les processus</td><td>Vit sur le disque</td></tr>
+<tr><td>Disparaît quand on arrête Oracle</td><td>Reste quand on arrête Oracle</td></tr>
+<tr><td>Contient SGA, PGA et processus de fond</td><td>Contient datafiles, controlfiles, redo logs</td></tr>
+<tr><td>Identifiée par son SID (ORACLE_SID)</td><td>Identifiée par son DB_NAME</td></tr>
+<tr><td>Donne un accès dynamique aux données</td><td>Contient le dictionnaire de données, les tables, index, vues</td></tr>
+</table></div>
+<p><span class="ref">page 9/55</span> Une instance gère l'accès à une base. Elle se compose de structures mémoire (SGA, PGA) et de processus de fond. En multitenant, une seule instance ouvre un seul conteneur (la CDB, qui contient plusieurs PDB). Le schéma colore en jaune/rose les structures mémoire du haut et en jaune les processus (PMON, SMON, DBWR, LGWR, CKPT, Autres) en bas.</p>
+<p><span class="ref">page 10/55</span> Schéma anglais : l'instance contient la SGA, les PGA, les Server Processes et les Background Processes, et elle "maintient" la base de données. Les applications clientes envoient du SQL aux Server Processes.</p>
+<p><span class="ref">page 11/55</span> Une instance = SGA + processus d'arrière-plan. Fonctions : exécuter les requêtes, gérer les entrées/sorties, maintenir la cohérence des transactions. En multitenant : une seule instance pour toute la CDB, partagée entre CDB$ROOT, PDB$SEED et les PDB. Avantages : mutualisation des ressources, meilleure performance, gestion simplifiée.</p>
+<p><span class="ref">page 12/55</span> Les cinq identifiants d'une instance : <b>DB_NAME</b> (nom de la base dont dépend l'instance), <b>SID</b> (identifiant de l'instance), <b>ORACLE_SID</b> (variable d'environnement de l'OS qui précise à quelle instance se joindre), le <b>fichier de paramètres</b> (PFILE, texte) et le <b>fichier de paramètres serveur</b> (SPFILE, binaire). Les deux requêtes de la page, <code>SELECT name FROM v$database;</code> et <code>SELECT instance_name FROM v$instance;</code>, te donnent le nom de la base et celui de l'instance.</p>
+<p><span class="ref">page 22/55</span> Règle à retenir : <b>une instance ne peut être associée qu'à une seule base de données, mais une base de données peut utiliser plusieurs instances</b> (c'est le principe de Oracle RAC, plusieurs serveurs sur la même base, pour la disponibilité). Mnémotechnique : un bibliothécaire ne travaille que pour une bibliothèque, mais une bibliothèque peut employer plusieurs bibliothécaires.</p>
+<p><span class="ref">page 23/55</span> Le tableau "Synthèse comparative" oppose l'architecture classique (avant 12c) à la multitenant :</p>
+<div class="scroll"><table>
+<tr><th>Aspect</th><th>Classique</th><th>Multitenant</th></tr>
+<tr><td>Instance</td><td>Une par base</td><td>Une seule pour toutes les PDB</td></tr>
+<tr><td>Base de données</td><td>Unique</td><td>CDB + PDB</td></tr>
+<tr><td>Gestion</td><td>Indépendante</td><td>Centralisée au niveau de la CDB</td></tr>
+<tr><td>Isolation</td><td>Totale</td><td>Logique (PDB isolées dans la même CDB)</td></tr>
+</table></div>
+<p>À droite de cette page, la liste de fichiers (orclpdb, pdb2, pdbseed, CONTROL01.CTL, REDO01...) est ce que tu verras réellement sur ton disque : ce sont les fichiers physiques de la base.</p>
+</section>
+
+<section id="conn">
+<h2>4. Connexion et session</h2>
+<p><span class="ref">pages 13/55 à 17/55</span> Quand tu lances SQL Developer et que tu te connectes, il se passe trois choses, dans cet ordre :</p>
+<div class="flow"><span>1. Connexion utilisateur</span><i>puis</i><span>2. Processus serveur créé</span><i>puis</i><span>3. Session Oracle créée</span></div>
+<dl>
+<dt>Processus utilisateur</dt><dd>Le programme côté client (SQL Developer, sqlplus). Ovale jaune sur les schémas.</dd>
+<dt>Processus serveur</dt><dd>Le processus côté Oracle qui travaille pour toi. Ovale bleu sur les schémas. Il lit, écrit et exécute tes requêtes. Il possède sa propre mémoire privée : la PGA.</dd>
+<dt>Session</dt><dd>La relation ouverte entre ton utilisateur et l'instance, du login jusqu'à la déconnexion. Elle a ses propres variables.</dd>
+<dt>SQL*Net</dt><dd>Le protocole réseau par lequel les deux processus se parlent.</dd>
+</dl>
+<p><span class="ref">page 14/55</span> Contexte local : Oracle 19c installé sur ta machine (localhost), accès par SQL Developer ou sqlplus, peu d'utilisateurs, objectif d'une base simple et facile à administrer.</p>
+<h3>Mode dédié ou mode partagé</h3>
+<p><span class="ref">page 15/55</span> En <b>mode dédié</b>, chaque session obtient son propre processus serveur. C'est comme avoir un serveur de restaurant rien que pour toi : performances stables, pas de dispatcher. C'est le mode par défaut et celui recommandé en localhost. <span class="ref">page 16/55</span> En <b>mode partagé</b>, plusieurs clients se partagent un pool de processus serveurs, via des dispatchers qui répartissent le travail. C'est comme un serveur qui s'occupe de plusieurs tables : économique quand il y a beaucoup de clients, mais plus complexe, donc inutile sur une machine locale. L'image avec "Client 1 à 4" illustre un serveur qui répond à plusieurs clients.</p>
+<p><span class="ref">page 17/55</span> Résumé : (1) établissement de la connexion, (2) création d'un processus serveur dédié ou partagé, (3) création d'une session. Les processus échangent via SQL*Net, et la session utilise la SGA et la PGA pour traiter les requêtes.</p>
+</section>
+
+<section id="fich">
+<h2>5. La base de données : les fichiers physiques</h2>
+<p><span class="ref">page 18/55</span> Une base Oracle est un ensemble de données traitées comme une seule entité, constituée de trois types de fichiers essentiels. Le schéma montre en orange la "Base de données CDB Oracle" avec ses trois groupes, et autour les fichiers annexes (paramètres, mots de passe, journaux archivés).</p>
+<dl>
+<dt>Fichiers de données (datafiles, .DBF)</dt><dd>Là où se trouvent tes tables, tes index et aussi le dictionnaire de données. C'est le "contenu" de la bibliothèque. Exemples vus page 23/55 : SYSTEM01.DBF, SYSAUX01.DBF, USERS01.DBF, UNDOTBS01.DBF, TEMP01.DBF.</dd>
+<dt>Fichiers de contrôle (control files, .CTL)</dt><dd>De petits fichiers très importants : ils décrivent la structure de la base (noms et emplacements de tous les autres fichiers, état de la base). Sans eux, Oracle ne sait plus où est quoi. C'est le catalogue de la bibliothèque. On en garde plusieurs copies (CONTROL01.CTL, CONTROL02.CTL), par sécurité.</dd>
+<dt>Fichiers de journalisation (redo log files)</dt><dd>Ils enregistrent toutes les modifications faites dans la base. C'est le registre où l'on note chaque changement : si la machine plante, Oracle relit ce registre pour rejouer ce qui n'avait pas encore été écrit dans les datafiles. Exemples : REDO01, REDO02, REDO03 (on les utilise en rotation).</dd>
+</dl>
+<p><span class="ref">page 25/55 (première diapositive, "Fichiers physiques")</span> Elle ajoute deux fichiers : les <b>fichiers archivés</b> (copies des redo logs, créées uniquement en mode ARCHIVELOG, utiles pour restaurer la base jusqu'à un moment précis) et le <b>fichier de paramètres</b> (SPFILE ou PFILE) qui configure l'instance, par exemple la taille de la mémoire. Le fichier de mots de passe, vu sur le schéma, authentifie les administrateurs.</p>
+<div class="box w"><b>Piège</b>Le fichier de paramètres configure l'instance, mais il est stocké sur le disque. C'est lui qu'Oracle lit en premier au démarrage, avant même de créer la SGA.</div>
+</section>
+
+<section id="log">
+<h2>6. Les structures logiques : comment les données sont rangées</h2>
+<p><span class="ref">page 25/55 (diapositives "Fichiers logiques")</span> Les fichiers physiques sont vus de l'extérieur, par le système d'exploitation. À l'intérieur, Oracle organise l'espace de façon logique, avec une hiérarchie que montre le petit schéma à droite : <b>Tablespace, puis Segment, puis Extent, puis Bloc</b>.</p>
+<dl>
+<dt>Tablespace</dt><dd>Un "rayon" de la bibliothèque : un regroupement logique de segments. Un tablespace est stocké dans un ou plusieurs datafiles. Types principaux : SYSTEM (métadonnées de la base), SYSAUX (informations auxiliaires), UNDO (infos pour annuler les transactions), TEMP (espace temporaire pour les tris et les hash joins) et USERS/DATA (tables et index des utilisateurs).</dd>
+<dt>Segment</dt><dd>L'espace occupé par un objet (une table, un index...). Types vus : segment de données (lignes de table), segment d'index, segment undo (anciennes valeurs, pour le rollback).</dd>
+<dt>Extent</dt><dd>Une suite de blocs contigus alloués à un segment. Oracle n'alloue pas le disque octet par octet, mais par paquets, ce qui facilite la gestion de l'espace.</dd>
+<dt>Bloc</dt><dd>La plus petite unité de stockage logique, de taille configurable (par exemple 8 Ko, paramètre DB_BLOCK_SIZE). C'est elle qui contient les lignes réelles. Quand Oracle lit le disque, il lit au minimum un bloc entier.</dd>
+</dl>
+<p>Analogie : tablespace = rayon, segment = collection d'une série de livres, extent = une étagère entière réservée, bloc = une page.</p>
+</section>
+
+<section id="mem">
+<h2>7. Les structures mémoire : SGA et PGA</h2>
+<p><span class="ref">page 26/55</span> Oracle utilise deux grandes zones de RAM. La <b>SGA</b> est allouée au démarrage de l'instance et partagée. La <b>PGA</b> est allouée au démarrage de chaque processus serveur et privée. Sur le schéma, chaque Server process a sa PGA, alors que la SGA (avec la taille maximale SGA_MAX_SIZE) contient Shared pool, Streams pool, Large pool, Java pool, Database buffer cache et Redo log buffer.</p>
+<p><span class="ref">page 28/55</span> Analogie : la SGA est le grand tableau commun de la salle, que tous les bibliothécaires voient. La PGA est le carnet personnel d'un bibliothécaire : ses notes de travail, ses tris en cours, les variables de ta session.</p>
+<h3>Les trois blocs essentiels de la SGA</h3>
+<p><span class="ref">pages 31/55 à 38/55</span></p>
+<dl>
+<dt>1. Zone de mémoire partagée (Shared pool)</dt>
+<dd>Elle stocke les dernières instructions SQL/PLSQL et les dernières définitions de données utilisées. Taille : paramètre SHARED_POOL_SIZE. Elle contient deux sous-caches. Le <b>cache "library"</b> garde les instructions SQL et PL/SQL récentes avec leur plan d'exécution, ce qui permet de partager une requête déjà analysée (gain de temps énorme), géré par LRU, avec une zone SQL partagée et une zone PL/SQL partagée. Le <b>cache du dictionnaire de données</b> (row cache) garde les définitions récentes (tables, colonnes, index, utilisateurs, privilèges). Au moment de l'analyse d'une requête, le processus serveur y vérifie que les noms d'objets existent et que tu as le droit d'y accéder. En 19c, chaque PDB profite d'optimisations pour un accès plus rapide à ses métadonnées.</dd>
+<dt>2. Cache de tampons de la base de données (Database buffer cache)</dt>
+<dd>Il garde des copies des blocs de données lus dans les datafiles. Quand tu lis ou modifies une ligne, Oracle travaille sur le bloc en RAM, pas sur le disque : gains de performance considérables. Géré par un LRU à plusieurs niveaux, il est partagé entre CDB et PDB. Il se découpe en sous-caches : DB_CACHE_SIZE (principal), DB_KEEP_CACHE_SIZE (ce qu'on veut garder), DB_RECYCLE_CACHE_SIZE (ce qu'on veut évacuer vite). Il peut être redimensionné dynamiquement (AMM ou ASMM), et DB_CACHE_ADVICE (ON, OFF, READY) collecte des statistiques consultables dans V$DB_CACHE_ADVICE pour savoir quelle taille serait idéale.</dd>
+<dt>3. Tampon de journalisation (Redo log buffer)</dt>
+<dd>Une petite zone qui note les modifications avant leur écriture dans les redo logs sur disque. Paramètre : LOG_BUFFER.</dd>
+</dl>
+<h3>Les autres composants de la SGA</h3>
+<p><span class="ref">pages 29/55 et 30/55</span> Large Pool (optionnel : RMAN pour les sauvegardes, exécution parallèle), Java Pool (procédures Java stockées), Streams Pool (réplication), Flashback Buffer (Flashback Database), In-Memory Area (stockage en colonnes pour accélérer l'analyse), Memoptimize Pool (accès rapide clé-valeur), Shared I/O Pool, Database Smart Flash Cache (extension sur disque flash, optionnelle) et Fixed SGA (variables internes d'Oracle). Pour un premier examen, concentre-toi sur les trois blocs ci-dessus.</p>
+<p><span class="ref">page 31/55</span> Les paramètres de taille de la SGA : SGA_MAX_SIZE (maximum), SHARED_POOL_SIZE, DB_CACHE_SIZE, LOG_BUFFER, LARGE_POOL_SIZE, JAVA_POOL_SIZE. La SGA contient aussi les verrous (lock) et les latchs, des mécanismes pour empêcher deux processus de modifier la même chose en même temps.</p>
+<h3>La PGA</h3>
+<p><span class="ref">page 28/55</span> Mémoire privée de chaque processus serveur, utilisée pour les tris, les hash joins et les variables de session. Gestion automatique par MEMORY_TARGET, SGA_TARGET et PGA_AGGREGATE_LIMIT.</p>
+<h3>Voir tout cela en SQL</h3>
+<p><span class="ref">page 34/55 environ (SGA et PGA)</span></p>
+<div class="scroll"><table>
+<tr><th>Commande</th><th>Ce qu'elle montre</th></tr>
+<tr><td><code>SHOW SGA;</code></td><td>Les grandes catégories : Fixed, Variable, Database Buffers, Redo Buffers</td></tr>
+<tr><td><code>SELECT * FROM V$SGA;</code></td><td>Les composants de la SGA et leur taille en octets</td></tr>
+<tr><td><code>SELECT * FROM V$SGASTAT;</code></td><td>Le détail des allocations par composant</td></tr>
+<tr><td><code>SELECT * FROM V$PGASTAT;</code></td><td>Les infos globales sur la PGA</td></tr>
+<tr><td><code>SELECT * FROM V$SESSION;</code></td><td>Les sessions ouvertes</td></tr>
+<tr><td><code>ALTER SYSTEM SET SHARED_POOL_SIZE = 64M;</code></td><td>Change la taille du Shared pool</td></tr>
+<tr><td><code>ALTER SYSTEM SET DB_CACHE_SIZE = 96M;</code></td><td>Change la taille du buffer cache</td></tr>
+</table></div>
+<p>Les vues commençant par <code>V$</code> sont des "vues dynamiques" : elles lisent l'état de l'instance en temps réel.</p>
+</section>
+
+<section id="proc">
+<h2>8. Les processus d'arrière-plan</h2>
+<p>Les diapositives les nomment (ovales jaunes en bas de l'instance sur les pages 1/55, 3/55, 4/55 et 9/55) sans les détailler encore. Voici ce que tu dois savoir de chacun, ce sera utile pour la suite du cours.</p>
+<dl>
+<dt>DBWR / DBWn (Database Writer)</dt><dd>Écrit sur disque les blocs modifiés du buffer cache, mais pas à chaque modification : il le fait en groupe, de façon différée, pour être efficace.</dd>
+<dt>LGWR (Log Writer)</dt><dd>Écrit le contenu du redo log buffer dans les redo logs. Il écrit notamment au COMMIT. C'est la garantie que ta transaction validée ne sera jamais perdue.</dd>
+<dt>CKPT (Checkpoint)</dt><dd>Signale régulièrement un point de repère : tous les changements jusqu'ici sont sur disque. Il met à jour les fichiers de contrôle et les en-têtes des datafiles. Il raccourcit la récupération après une panne.</dd>
+<dt>SMON (System Monitor)</dt><dd>Le "réparateur" : au démarrage après un arrêt brutal, il effectue la récupération de l'instance, et il nettoie l'espace temporaire.</dd>
+<dt>PMON (Process Monitor)</dt><dd>Le "nettoyeur de sessions" : si un processus utilisateur meurt, il annule sa transaction et libère ses ressources (verrous, mémoire).</dd>
+</dl>
+<div class="box"><b>Comment tout cela s'enchaîne</b>Tu fais un UPDATE : le processus serveur lit le bloc dans le buffer cache (en le chargeant depuis le datafile si besoin), le modifie en RAM, et note le changement dans le redo log buffer. Au COMMIT, LGWR écrit le redo sur disque. Plus tard, DBWR écrit le bloc modifié dans le datafile. CKPT marque la progression. Si tout plante entre-temps, SMON utilise les redo logs au redémarrage pour tout remettre en ordre.</div>
+</section>
+
+<section id="mt">
+<h2>9. L'architecture multitenant (CDB et PDB)</h2>
+<p>Avant Oracle 12c, chaque base avait sa propre instance : dix bases, dix instances, donc dix fois la mémoire et dix fois les processus. Le multitenant résout cela. Analogie : au lieu de construire dix maisons avec chacune sa chaudière, on construit un <b>immeuble</b> avec une seule chaudière (l'instance) partagée par des appartements indépendants (les PDB).</p>
+<dl>
+<dt>CDB (Container Database)</dt><dd>L'immeuble entier, la base "conteneur". Une CDB a une instance, une SGA et des processus de fond.</dd>
+<dt>CDB$ROOT</dt><dd>La racine : le local technique. Elle contient les métadonnées communes et les utilisateurs communs.</dd>
+<dt>PDB$SEED</dt><dd>L'appartement modèle, en lecture seule. Oracle le copie pour créer rapidement une nouvelle PDB.</dd>
+<dt>PDB (Pluggable Database)</dt><dd>Un appartement : une base logique autonome qui a ses propres objets et schémas, et se comporte comme une base indépendante. Elle peut être "branchée" ou "débranchée" (d'où "enfichable") et déplacée vers une autre CDB. Exemples de la page 4/55 : PDB1 pour "RH", PDB2 pour "VENTES".</dd>
+</dl>
+<p><span class="ref">page 19/55</span> Chaque PDB possède ses propres objets et schémas. Les datafiles de chaque PDB sont rangés dans leur dossier (orclpdb, pdb2, pdbseed, page 23/55). Les fichiers de contrôle et les redo logs, eux, sont communs à la CDB.</p>
+<p>Avantages : mutualisation des ressources, meilleure performance, gestion centralisée (une sauvegarde, une mise à jour pour toute la CDB) et isolation logique entre les PDB.</p>
+</section>
+
+<section id="fin">
+<h2>10. Résumé et pièges d'examen</h2>
+<div class="box"><b>À savoir par coeur</b>
+Serveur Oracle = Instance + Base de données.<br>
+Instance = SGA + PGA + processus de fond (RAM et processus).<br>
+Base de données = datafiles + controlfiles + redo logs (disque).<br>
+Connexion = processus utilisateur, puis processus serveur, puis session.<br>
+Hiérarchie logique : Tablespace, Segment, Extent, Bloc.<br>
+Multitenant = une instance, une CDB, plusieurs PDB.</div>
+<div class="box w"><b>Pièges fréquents</b>
+1. Ne pas confondre instance et base : l'une est en RAM, l'autre sur le disque.<br>
+2. SGA = partagée par tous. PGA = privée à chaque processus serveur.<br>
+3. Une instance n'ouvre qu'une base, mais une base peut avoir plusieurs instances.<br>
+4. Le mode dédié est le mode par défaut et le bon choix en localhost.<br>
+5. Le Shared pool contient le cache library ET le cache du dictionnaire de données.<br>
+6. Le buffer cache stocke des blocs de données, le redo log buffer stocke des modifications.</div>
+<h3>Auto-test rapide</h3>
+<p>Essaie de répondre sans regarder : Que se passe-t-il quand on coupe l'instance, que reste-t-il ? Pourquoi existe-t-il deux caches différents dans le Shared pool ? Quel processus écrit au COMMIT ? Pourquoi le multitenant économise-t-il de la mémoire ?</p>
+</section>
+</main>
+<footer>Document préparé pour Jihad Tichti, Cours Bases de Données Avancées, Prof. Zineb Lamghari</footer>
+</body>
+</html>
